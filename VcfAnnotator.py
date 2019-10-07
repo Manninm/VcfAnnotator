@@ -18,23 +18,45 @@ import requests
 def readSource(vcfFile):
 	"""Reads in source file and formats for further use in other functions to construct table of VCF annotation 
 	Args:VCF file
-	Returns: a formated string """
+	Returns: two formated lists. One of REST get requests, and one of the variant infor used to construct the requests. Both will be used to construct an annotation table"""
 	with open(vcfFile,'r') as lines:
+		restCalls=list()
+		tabInfo=list()
 		for line in lines:
-			if line.startswith('#'): #skips over comment section of gff file
+			if line.startswith('#'): #skips over comment section of VCF file
 				continue
-			fields=line.strip().split('\t')
-			print(fields)
-
-
-
-
+			fields=line.strip().split('\t') #separating lines for iteration
+			#print(fields)
+			#print(len(fields))
+			if ',' in fields[4]: #checking for multiple alternative alleles
+				alleles=fields[4].strip().split(',')
+				for allele in range(len(alleles)): #get request call and table information for each alternative allele
+					fieldInfo=fields[0]+'\t'+fields[1]+'\t'+fields[3]+'\t'+alleles[allele-1]+'\t'
+					getReq='api.http://exac.hms.harvard.edu/rest/variant/'+fields[0].replace('chr','')+'-'+fields[1]+'-'+fields[3]+'-'+alleles[allele-1]
+					restCalls.append(getReq)
+					tabInfo.append(fieldInfo)
+			else:
+				fieldInfo=fields[0]+'\t'+fields[1]+'\t'+fields[3]+'\t'+fields[4]+'\t' #constructing table information and request call string
+				getReq='api.http://exac.hms.harvard.edu/rest/variant/'+fields[0].replace('chr','')+'-'+fields[1]+'-'+fields[3]+'-'+fields[4]
+				tabInfo.append(fieldInfo)
+				restCalls.append(getReq)
+		#print(restCalls)
+		#print(tabInfo)
+		return(tabInfo,restCalls)
 
 
 
 def main():
+	if len(sys.argv) < 1:
+		sys.stderr.write("\nUSAGE: python " + sys.argv[0] + " VCF file > output\n\n")
+		sys.exit(1)
 	sourceFile=sys.argv[1]
-	readSource(sourceFile)
-
+	tab,calls=readSource(sourceFile)
+	outputfile = input("Enter a file name: ") 
+	with open(outputfile, mode="w", encoding="utf8" ) as fp:
+		fp.write('Chromosome\tPosition\tReferenceAllele\tAltAllele\tRequestCall\n')
+		for info in range(len(tab)):
+			item=tab[info-1]+calls[info-1]+'\n'
+			fp.write(item)
 if __name__ == '__main__':
         main()
