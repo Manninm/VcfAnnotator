@@ -24,7 +24,7 @@ import json
 def readSource(vcfFile):
 	"""Reads in source file and formats for further use in other functions to construct table of VCF annotation 
 	Args:VCF file
-	Returns: two formated lists. One of REST get requests, and one of the variant information used to construct the requests. Both will be used to construct an annotation table"""
+	Returns: 3 formated lists. One of REST get requests, one of the allele information, one of variant information. All will be used to construct an annotation table"""
 	with open(vcfFile,'r') as lines:
 		restCalls=list()
 		tabInfo=list()
@@ -79,11 +79,19 @@ def readSource(vcfFile):
 	
 def RestRequest(RequestList):
 	"""
-	Takes list of REST get requests links and fetches annotation for each variant in list
+	Takes list of REST get requests links and fetches variant effects, asuming the most deleterious effect is listed first
 	Args: REST get request links
-	Returns:?
+	Returns:A list of var effects
 	"""
-
+	Req=RequestList
+	VarEffect=list()
+	for link in range(len(Req)):
+		response=requests.get[link-1]
+		effect=response.json()
+		#VarEffect.append(effect[1])
+		print(effect[1])
+	#return VarEffect
+		
 
 def main():
 	if len(sys.argv) < 1: #checks number of arguments and prompts user with usage if incorrect # provided
@@ -91,12 +99,12 @@ def main():
 		sys.exit(1)
 	sourceFile=sys.argv[1] #passes trailing arguement to variable 
 	tab,calls,allele=readSource(sourceFile) #passes arguement to function call and collects two lists as return values
-	#annot=RestRequest(calls)
+	GetEffect=RestRequest(calls)
 	outputfile = input("Enter a file name: ") 
 	with open(outputfile, mode="w", encoding="utf8" ) as fp: #constructing annotation table
-		fp.write('Chromosome\tPosition\tReferenceAllele\tAltAllele\tAlleleFreq\tVarType\tLociReadDepth\tAlleleReadDepth\t%VariantReands\t%RefReads\tRequestCall\n') #table needs a nice header!
+		fp.write('Chromosome\tPosition\tReferenceAllele\tAltAllele\VarEffectttAlleleFreq\tVarType\tLociReadDepth\tAlleleReadDepth\t%VariantReands\t%RefReads\tRequestCall\n') #table needs a nice header!
 		for info in range(len(tab)):
-			item=tab[info-1]+allele[info-1]+'\t'+calls[info-1]+'\n'
+			item=tab[info-1]+GetEffect[info-1]+'\t'+allele[info-1]+'\t'+calls[info-1]+'\n'
 			fp.write(item)
 if __name__ == '__main__': #allows for python interpreter to import as module as well as que from command line
         main()
