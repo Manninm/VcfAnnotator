@@ -85,12 +85,19 @@ def RestRequest(RequestList):
 	"""
 	Req=RequestList
 	VarEffect=list()
-	for link in range(len(Req)):
-		response=requests.get[link-1]
-		effect=response.json()
-		#VarEffect.append(effect[1])
-		print(effect[1])
-	#return VarEffect
+	for link in Req:
+		print(link)
+		response=requests.get(link)
+		effect=json.loads(response.content)
+		if effect is None:
+			VarEffect.append('null')
+		elif len(effect) == 1:
+			VarEffect.append('null')
+		else:
+			VarEffect.append(effect[1])
+	return VarEffect
+	
+	
 		
 
 def main():
@@ -102,7 +109,7 @@ def main():
 	GetEffect=RestRequest(calls)
 	outputfile = input("Enter a file name: ") 
 	with open(outputfile, mode="w", encoding="utf8" ) as fp: #constructing annotation table
-		fp.write('Chromosome\tPosition\tReferenceAllele\tAltAllele\VarEffectttAlleleFreq\tVarType\tLociReadDepth\tAlleleReadDepth\t%VariantReands\t%RefReads\tRequestCall\n') #table needs a nice header!
+		fp.write('Chromosome\tPosition\tReferenceAllele\tAltAllele\tVarEffectttAlleleFreq\tVarType\tLociReadDepth\tAlleleReadDepth\t%VariantReands\t%RefReads\tRequestCall\n') #table needs a nice header!
 		for info in range(len(tab)):
 			item=tab[info-1]+GetEffect[info-1]+'\t'+allele[info-1]+'\t'+calls[info-1]+'\n'
 			fp.write(item)
