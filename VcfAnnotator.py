@@ -7,7 +7,6 @@ This script takes a VCF file from the command line and annotates it using the Ex
 Args: a VCF file, and file name from user prompt via command line
 Returns: A tab delimited text file with annotations for each variant (multiple allelic are decomposed into their own REST requests) 
 Table includes Chromosome, Position, ReferenceAllele, Variant Effect, AltAllele, AlleleFreq, VarType, LociReadDepth, AlleleReadDepth, %VariantReads, %RefReads, RequestCall'
-
 Relevant sources:
 ExAC REST Api: http://exac.hms.harvard.edu/
 VCF Version 4.2 Specifications: https://samtools.github.io/hts-specs/VCFv4.2.pdf
@@ -38,18 +37,16 @@ def readSource(vcfFile):
 			if ',' in fields[4]: #checking for multiple alternative alleles, if multiple alleles, will be in fifth column comma seperated
 				alleles=fields[4].strip().split(',')
 				info=fields[7].strip().split(';') # only need AF (3) and Type (-2) #AB;ABP;AC;AF;AN;AO;CIGAR;DP;DPB;DPRA;EPP;EPPR;GTI;LE;MEANALT;MQM;MQMR;NS;NUMAL;ODDS;PAIRED=1;PAIREDR;PAO;PQA;PQR;PRO;QA;QR;RO;RPL;RPP;RPPR;RPR;RUN;SAF;SAP;SAR;SRF;SRP;SRR;TYPE;technology
-				AF=info[3].replace('AF=','').strip().split(',')
-				AType=info[-2].replace('TYPE=','').split(',')
 				genotype=fields[9].strip().split(':') #fetching genotype in column 10 ; sep GT:GQ:DP:AD:RO:QR:AO:QA:GL
 				AO=genotype[6].strip().split(',')
 				for allele in range(len(alleles)): #get request call and table information for each alternative allele
-					AD=genotype[4]
+					RO=genotype[4]
 					DP=genotype[2]
 					AR=int(AO[allele])/int(DP) #Calculating percent reads confirming variant allele
-					RR=int(AD)/int(DP) #calculating percent reads confirming ref allele
+					RR=int(RO)/int(DP) #calculating percent reads confirming ref allele
 					fieldInfo=fields[0]+'\t'+fields[1]+'\t'+fields[3]+alleles[allele-1]+'\t'
-					alInfo=AF[allele-1]+'\t'+AType[allele-1]+genotype[2]+'\t'+AO[allele]+str(AR)+'\t'+str(RR)+'\t'
-					getReq='http://exac.hms.harvard.edu/rest/variant/ordered_csqs/'+fields[0].replace('chr','')+'-'+fields[1]+'-'+fields[3]+'-'+alleles[allele-1]
+					alInfo=genotype[2]+'\t'+AO[allele]+str(AR)+'\t'+str(RR)+'\t'
+					getReq=fields[0].replace('chr','')+'-'+fields[1]+'-'+fields[3]+'-'+alleles[allele-1]
 					restCalls.append(getReq)
 					tabInfo.append(fieldInfo)	
 					AlInfo.append(alInfo)
@@ -58,16 +55,14 @@ def readSource(vcfFile):
 				info=fields[7].strip().split(';')
 				genotype=fields[9].strip().split(';') #fetching genotype field GT:GQ:DP:AD:RO:QR:AO:QA:GL
 				fieldInfo=fields[0]+'\t'+fields[1]+'\t'+fields[3]+'\t'+fields[4]+'\t' #constructing table information and request call string
-				AF=info[3].replace('AF=','')
-				AType=info[-2].replace('TYPE=','')
 				genotype=fields[9].strip().split(':')
 				AO=genotype[6]
-				AD=genotype[4]
+				RO=genotype[4]
 				DP=genotype[2]
 				AR=int(AO)/int(DP)
-				RR=int(AD)/int(DP)
-				alInfo=AF+'\t'+AType+'\t'+genotype[2]+'\t'+AO+'\t'+str(AR)+'\t'+str(RR)+'\t'
-				getReq='http://exac.hms.harvard.edu/rest/variant/ordered_csqs/'+fields[0].replace('chr','')+'-'+fields[1]+'-'+fields[3]+'-'+fields[4]
+				RR=int(RO)/int(DP)
+				alInfo=genotype[2]+'\t'+AO+'\t'+str(AR)+'\t'+str(RR)+'\t'
+				getReq=fields[0].replace('chr','')+'-'+fields[1]+'-'+fields[3]+'-'+fields[4]
 				restCalls.append(getReq)
 				tabInfo.append(fieldInfo)
 				AlInfo.append(alInfo)
@@ -78,28 +73,34 @@ def readSource(vcfFile):
 		return(tabInfo,restCalls,AlInfo)
 	
 def RestRequest(RequestList):
-	"""
-	Takes list of REST get requests links and fetches variant effects, asuming the most deleterious effect is listed first
-	Args: REST get request links
-	Returns:A list of var effects
-	"""
+	"""		
+	Takes list of variant IDs for bulk query of REST API ExAC database 		
+	Args: List of Variant IDs		
+	Returns:List of allele frequencies and effects		
+	"""		
 	Req=RequestList
-	VarEffect=list()
-	for link in Req:
-		print(link)
-		response=requests.get(link)
-		effect=json.loads(response.content)
-		if effect is None:
-			VarEffect.append('null')
-		elif len(effect) == 1:
-			VarEffect.append('null')
+	calls=json.dumps(RequestList)
+	VarEffect=list()					
+	response=requests.post('http://exac.hms.harvard.edu/rest/bulk/variant/variant',data=calls)
+	json_data=json.loads(response.text)
+	for id in range(len(Req)):
+		print(Req[id-1])
+		if 'vep_annotations' in json_data[Req[id-1]] and len(json_data[Req[id-1]]['vep_annotations']) > 0:
+			symb=json_data[Req[id-1]]['vep_annotations'][0].get('SYMBOL')[0]
+			Con=json_data[Req[id-1]]['vep_annotations'][0].get('major_consequence')
+			Freq=json_data.get(Req[id-1],{}).get('allele_freq')
+			Genes=json_data[Req[id-1]]['genes'][0]
+			var=Con+'\t'+str(Freq)+'\t'+Genes+'\t'+symb
+			VarEffect.append(var)
 		else:
-			VarEffect.append(effect[1])
-	return VarEffect
-	
-	
+			symb='NULL'
+			Con='NULL'
+			Freq="NULL"
+			Genes='NULL'
+			var=Con+'\t'+str(Freq)+'\t'+Genes+'\t'+symb
+			VarEffect.append(var)
+	return(VarEffect)
 		
-
 def main():
 	if len(sys.argv) < 1: #checks number of arguments and prompts user with usage if incorrect # provided
 		sys.stderr.write("\nUSAGE: python " + sys.argv[0] + " VCF file > output\n\n")
@@ -109,7 +110,7 @@ def main():
 	GetEffect=RestRequest(calls)
 	outputfile = input("Enter a file name: ") 
 	with open(outputfile, mode="w", encoding="utf8" ) as fp: #constructing annotation table
-		fp.write('Chromosome\tPosition\tReferenceAllele\tAltAllele\tVarEffectttAlleleFreq\tVarType\tLociReadDepth\tAlleleReadDepth\t%VariantReands\t%RefReads\tRequestCall\n') #table needs a nice header!
+		fp.write('Chromosome\tPosition\tReferenceAllele\tAltAllele\tVarEffect\tAlleleFreq\tGenes\tSymbol\tVarType\tLociReadDepth\tAlleleReadDepth\t%VariantReands\t%RefReads\tRequestCall\n') #table needs a nice header!
 		for info in range(len(tab)):
 			item=tab[info-1]+GetEffect[info-1]+'\t'+allele[info-1]+'\t'+calls[info-1]+'\n'
 			fp.write(item)
