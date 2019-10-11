@@ -3,10 +3,13 @@
 """
 Created on Sun Oct 6 06:20:27 2019
 @author: manninm
-This script takes a VCF file from the command line and annotates it using the ExAC REST API @ http://api.exac.hms.harvard.edu/requests
+This script takes a VCF file from the command line and annotates it using the ExAC REST API @ http://api.exac.hms.harvard.edu/requests by submitting a bulk query get post of variant IDs in json array
+
 Args: a VCF file, and file name from user prompt via command line
 Returns: A tab delimited text file with annotations for each variant (multiple allelic are decomposed into their own REST requests) 
-Table includes Chromosome, Position, ReferenceAllele, Variant Effect, AltAllele, AlleleFreq, VarType, LociReadDepth, AlleleReadDepth, %VariantReads, %RefReads, RequestCall'
+
+Table includes Chromosome, Position, ReferenceAllele, AltAllele, VarEffect, AlleleFreq, Genes, Symbol, VarType, LociReadDepth, AlleleReadDepth, %VariantReands, %RefReads, RequestCall
+
 Relevant sources:
 ExAC REST Api: http://exac.hms.harvard.edu/
 VCF Version 4.2 Specifications: https://samtools.github.io/hts-specs/VCFv4.2.pdf
@@ -28,30 +31,30 @@ def readSource(vcfFile):
 		restCalls=list()
 		tabInfo=list()
 		AlInfo=list()
-		for line in lines:
+		for line in lines: #for loop reads through lines of VCF and formats for later process
 			if line.startswith('#'): #skips over metasection of VCF file
 				continue
-			fields=line.strip().split('\t') #separating lines for iteration
+			fields=line.strip().split('\t') #separating lines for iteration by tab
 			#print(fields)
 			#print(len(fields))
 			if ',' in fields[4]: #checking for multiple alternative alleles, if multiple alleles, will be in fifth column comma seperated
-				alleles=fields[4].strip().split(',')
-				info=fields[7].strip().split(';') # only need AF (3) and Type (-2) #AB;ABP;AC;AF;AN;AO;CIGAR;DP;DPB;DPRA;EPP;EPPR;GTI;LE;MEANALT;MQM;MQMR;NS;NUMAL;ODDS;PAIRED=1;PAIREDR;PAO;PQA;PQR;PRO;QA;QR;RO;RPL;RPP;RPPR;RPR;RUN;SAF;SAP;SAR;SRF;SRP;SRR;TYPE;technology
+				alleles=fields[4].strip().split(',') # separating multiple alleles
+				info=fields[7].strip().split(';') # 
 				genotype=fields[9].strip().split(':') #fetching genotype in column 10 ; sep GT:GQ:DP:AD:RO:QR:AO:QA:GL
-				AO=genotype[6].strip().split(',')
+				AO=genotype[6].strip().split(',') #separating multiple allele counts (doesn't contain ref)
 				for allele in range(len(alleles)): #get request call and table information for each alternative allele
-					RO=genotype[4]
-					DP=genotype[2]
+					RO=genotype[4] #ref allele counts
+					DP=genotype[2] #total read depth
 					AR=int(AO[allele])/int(DP) #Calculating percent reads confirming variant allele
 					RR=int(RO)/int(DP) #calculating percent reads confirming ref allele
-					fieldInfo=fields[0]+'\t'+fields[1]+'\t'+fields[3]+alleles[allele-1]+'\t'
-					alInfo=genotype[2]+'\t'+AO[allele]+str(AR)+'\t'+str(RR)+'\t'
-					getReq=fields[0].replace('chr','')+'-'+fields[1]+'-'+fields[3]+'-'+alleles[allele-1]
-					restCalls.append(getReq)
+					fieldInfo=fields[0]+'\t'+fields[1]+'\t'+fields[3]+alleles[allele-1]+'\t' #collecting info on variant chrom,position,ref and alt alleles
+					alInfo=genotype[2]+'\t'+AO[allele]+str(AR)+'\t'+str(RR)+'\t' # collects read depth, variant depth, %AlleleReads, %RefReads
+					getReq=fields[0].replace('chr','')+'-'+fields[1]+'-'+fields[3]+'-'+alleles[allele-1] #Collects variant ID for bulk query
+					restCalls.append(getReq) #append values to empty lists for transfer to other functions
 					tabInfo.append(fieldInfo)	
 					AlInfo.append(alInfo)
 					#print(AlInfo)
-			else:
+			else: #if not multi-allelelic do as above but no in forloop
 				info=fields[7].strip().split(';')
 				genotype=fields[9].strip().split(';') #fetching genotype field GT:GQ:DP:AD:RO:QR:AO:QA:GL
 				fieldInfo=fields[0]+'\t'+fields[1]+'\t'+fields[3]+'\t'+fields[4]+'\t' #constructing table information and request call string
@@ -79,20 +82,20 @@ def RestRequest(RequestList):
 	Returns:List of allele frequencies and effects		
 	"""		
 	Req=RequestList
-	calls=json.dumps(RequestList)
+	calls=json.dumps(RequestList) #convert list of IDS into json array
 	VarEffect=list()					
-	response=requests.post('http://exac.hms.harvard.edu/rest/bulk/variant/variant',data=calls)
-	json_data=json.loads(response.text)
+	response=requests.post('http://exac.hms.harvard.edu/rest/bulk/variant/variant',data=calls) #bulk query post request
+	json_data=json.loads(response.text) #converts json post data to a multi-embedded python dictionary
 	for id in range(len(Req)):
 		print(Req[id-1])
-		if 'vep_annotations' in json_data[Req[id-1]] and len(json_data[Req[id-1]]['vep_annotations']) > 0:
+		if 'vep_annotations' in json_data[Req[id-1]] and len(json_data[Req[id-1]]['vep_annotations']) > 0: #vep annotation was most complete in bulk query post return. Some variants do not have vep annotation must, and some have empty vep_annotations testing for both scenarios in one if/else statement
 			symb=json_data[Req[id-1]]['vep_annotations'][0].get('SYMBOL')[0]
-			Con=json_data[Req[id-1]]['vep_annotations'][0].get('major_consequence')
-			Freq=json_data.get(Req[id-1],{}).get('allele_freq')
+			Con=json_data[Req[id-1]]['vep_annotations'][0].get('major_consequence')#bulk consequence query post is 404:Not found, take major_consequence assuming first entry is most detrimental  variant
+			Freq=json_data.get(Req[id-1],{}).get('allele_freq') #search dictionary for any value attached to allele_freq key
 			Genes=json_data[Req[id-1]]['genes'][0]
 			var=Con+'\t'+str(Freq)+'\t'+Genes+'\t'+symb
 			VarEffect.append(var)
-		else:
+		else: #some variants have missing vep_annotations, if they fail the above if statement, these entries will be empty/not found
 			symb='NULL'
 			Con='NULL'
 			Freq="NULL"
@@ -105,10 +108,10 @@ def main():
 	if len(sys.argv) < 1: #checks number of arguments and prompts user with usage if incorrect # provided
 		sys.stderr.write("\nUSAGE: python " + sys.argv[0] + " VCF file > output\n\n")
 		sys.exit(1)
-	sourceFile=sys.argv[1] #passes trailing arguement to variable 
-	tab,calls,allele=readSource(sourceFile) #passes arguement to function call and collects two lists as return values
-	GetEffect=RestRequest(calls)
-	outputfile = input("Enter a file name: ") 
+	sourceFile=sys.argv[1] #passes trailing arguement to variable
+	tab,calls,allele=readSource(sourceFile) #passes arguement to function call and collects 3 lists as return values
+	GetEffect=RestRequest(calls) #passes list of bulk query IDs to RestRequest() function
+	outputfile = input("Enter a file name: ") #prompts user to enter file name from command line, prevents overwriting previous files
 	with open(outputfile, mode="w", encoding="utf8" ) as fp: #constructing annotation table
 		fp.write('Chromosome\tPosition\tReferenceAllele\tAltAllele\tVarEffect\tAlleleFreq\tGenes\tSymbol\tVarType\tLociReadDepth\tAlleleReadDepth\t%VariantReands\t%RefReads\tRequestCall\n') #table needs a nice header!
 		for info in range(len(tab)):
