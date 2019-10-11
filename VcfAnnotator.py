@@ -3,6 +3,8 @@
 """
 Created on Sun Oct 6 06:20:27 2019
 @author: manninm
+version python3.6
+not tested in earlier versions of python
 This script takes a VCF file from the command line and annotates it using the ExAC REST API @ http://api.exac.hms.harvard.edu/requests by submitting a bulk query get post of variant IDs in json array
 
 Args: a VCF file, and file name from user prompt via command line
