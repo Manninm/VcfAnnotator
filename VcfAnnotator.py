@@ -15,14 +15,13 @@ ExAC REST Api: http://exac.hms.harvard.edu/
 VCF Version 4.2 Specifications: https://samtools.github.io/hts-specs/VCFv4.2.pdf
 crash course in Variant Call Format: https://faculty.washington.edu/browning/intro-to-vcf.html 
 crash course in python api: https://realpython.com/api-integration-in-python/
-requests library videos:https://www.youtube.com/watch?v=QovKok-2u9k 
 requests library guide: https://realpython.com/python-requests/#the-get-request
 Json In Python: https://realpython.com/python-json/
 """
 import sys
 import requests
 import json
-
+from openpyxl import Workbook
 def readSource(vcfFile):
 	"""Reads in source file and formats for further use in other functions to construct table of VCF annotation 
 	Args:VCF file
@@ -87,7 +86,7 @@ def RestRequest(RequestList):
 	response=requests.post('http://exac.hms.harvard.edu/rest/bulk/variant/variant',data=calls) #bulk query post request
 	json_data=json.loads(response.text) #converts json post data to a multi-embedded python dictionary
 	for id in range(len(Req)):
-		print(Req[id-1])
+		#print(Req[id-1])
 		if 'vep_annotations' in json_data[Req[id-1]] and len(json_data[Req[id-1]]['vep_annotations']) > 0: #vep annotation was most complete in bulk query post return. Some variants do not have vep annotation must, and some have empty vep_annotations testing for both scenarios in one if/else statement
 			symb=json_data[Req[id-1]]['vep_annotations'][0].get('SYMBOL')[0]
 			Con=json_data[Req[id-1]]['vep_annotations'][0].get('major_consequence')#bulk consequence query post is 404:Not found, take major_consequence assuming first entry is most detrimental  variant
